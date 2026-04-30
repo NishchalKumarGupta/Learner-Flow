@@ -1,4 +1,4 @@
-require('dotenv').config();
+require('dotenv').config({ path: __dirname + '/.env' });
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
@@ -29,9 +29,9 @@ app.get('/api/health', (req, res) => {
 });
 
 // Get YouTube playlist videos
-app.post('/api/playlist', async (req, res) => {
+app.get('/api/playlist', async (req, res) => {
   try {
-    const { playlistId } = req.body;
+    const { playlistId, pageToken } = req.query;
 
     if (!playlistId) {
       return res.status(400).json({ error: 'Playlist ID is required' });
@@ -41,13 +41,19 @@ app.post('/api/playlist', async (req, res) => {
       return res.status(500).json({ error: 'YouTube API key not configured' });
     }
 
+    const params = {
+      key: YT_API_KEY,
+      playlistId: playlistId,
+      part: 'snippet',
+      maxResults: 50
+    };
+
+    if (pageToken) {
+      params.pageToken = pageToken;
+    }
+
     const response = await axios.get('https://www.googleapis.com/youtube/v3/playlistItems', {
-      params: {
-        key: YT_API_KEY,
-        playlistId: playlistId,
-        part: 'snippet',
-        maxResults: 50
-      }
+      params: params
     });
 
     const videos = response.data.items.map(item => ({
@@ -57,7 +63,10 @@ app.post('/api/playlist', async (req, res) => {
       thumbnail: item.snippet.thumbnails.default.url
     }));
 
-    res.json({ videos });
+    res.json({ 
+      videos: videos,
+      nextPageToken: response.data.nextPageToken || null
+    });
   } catch (error) {
     console.error('Error fetching playlist:', error.message);
     res.status(500).json({ error: 'Failed to fetch playlist', details: error.message });
